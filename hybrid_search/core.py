@@ -44,14 +44,20 @@ class HybridSearch:
         self._documents: dict[str, dict[str, str]] = {}
 
     def add(self, doc_id: str, title: str, content: str) -> None:
+        if self._has_document_id(doc_id):
+            raise ValueError(f"Document already exists: {doc_id}")
         self._register_document_id(doc_id)
         self._documents[doc_id] = {"title": title, "content": content}
 
     def update(self, doc_id: str, title: str, content: str) -> None:
+        if not self._has_document_id(doc_id):
+            raise KeyError(f"Document not found: {doc_id}")
         self._remove_document(doc_id)
         self.add(doc_id, title, content)
 
     def delete(self, doc_id: str) -> None:
+        if not self._has_document_id(doc_id):
+            raise KeyError(f"Document not found: {doc_id}")
         self._remove_document(doc_id)
 
     def _register_document_id(self, doc_id: str) -> None:
