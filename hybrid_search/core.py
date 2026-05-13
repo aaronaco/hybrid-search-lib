@@ -41,6 +41,11 @@ class HybridSearch:
         self.weights = dict(_DEFAULT_WEIGHTS if weights is None else weights)
         self.top_k = top_k
         self._document_ids: set[str] = set()
+        self._documents: dict[str, dict[str, str]] = {}
+
+    def add(self, doc_id: str, title: str, content: str) -> None:
+        self._register_document_id(doc_id)
+        self._documents[doc_id] = {"title": title, "content": content}
 
     def _register_document_id(self, doc_id: str) -> None:
         self._document_ids.add(doc_id)
