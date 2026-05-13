@@ -40,3 +40,13 @@ class HybridSearch:
         self.chunk_overlap = chunk_overlap
         self.weights = dict(_DEFAULT_WEIGHTS if weights is None else weights)
         self.top_k = top_k
+        self._document_ids: set[str] = set()
+
+    def _register_document_id(self, doc_id: str) -> None:
+        self._document_ids.add(doc_id)
+
+    def _unregister_document_id(self, doc_id: str) -> None:
+        self._document_ids.discard(doc_id)
+
+    def _has_document_id(self, doc_id: str) -> bool:
+        return doc_id in self._document_ids
