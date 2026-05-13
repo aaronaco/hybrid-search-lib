@@ -1,5 +1,5 @@
 """Local hybrid search library."""
 
-from .core import HybridSearch
+from .core import HybridSearch, SearchResult
 
-__all__ = ["HybridSearch"]
+__all__ = ["HybridSearch", "SearchResult"]
