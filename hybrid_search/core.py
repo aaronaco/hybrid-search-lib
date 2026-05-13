@@ -47,6 +47,13 @@ class HybridSearch:
         self._register_document_id(doc_id)
         self._documents[doc_id] = {"title": title, "content": content}
 
+    def update(self, doc_id: str, title: str, content: str) -> None:
+        self._remove_document(doc_id)
+        self.add(doc_id, title, content)
+
+    def delete(self, doc_id: str) -> None:
+        self._remove_document(doc_id)
+
     def _register_document_id(self, doc_id: str) -> None:
         self._document_ids.add(doc_id)
 
@@ -55,3 +62,7 @@ class HybridSearch:
 
     def _has_document_id(self, doc_id: str) -> bool:
         return doc_id in self._document_ids
+
+    def _remove_document(self, doc_id: str) -> None:
+        self._unregister_document_id(doc_id)
+        self._documents.pop(doc_id, None)
