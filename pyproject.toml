@@ -8,6 +8,8 @@ license = "MIT"
 license-files = ["LICENSE"]
 dependencies = [
     "chromadb>=1.5.9",
+    "rank-bm25>=0.2.2",
+    "rapidfuzz>=3.14.5",
     "sentence-transformers>=5.5.0",
 ]
 
@@ -25,3 +27,7 @@ dev = [
     "pytest>=9.0.3",
     "ruff>=0.15.12",
 ]
+
+[[tool.mypy.overrides]]
+module = ["rank_bm25"]
+ignore_missing_imports = true
