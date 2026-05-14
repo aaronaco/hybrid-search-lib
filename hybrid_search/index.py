@@ -1,5 +1,6 @@
 """Internal ChromaDB vector index wrapper."""
 
+from dataclasses import dataclass
 from pathlib import Path
 from collections.abc import Callable, Sequence
 from typing import Any
@@ -7,6 +8,17 @@ from typing import Any
 from hybrid_search.chunker import Chunk
 
 DEFAULT_COLLECTION_NAME = "hybrid_search_chunks"
+
+
+@dataclass
+class SemanticMatch:
+    """Internal semantic query result carrying chunk identity and raw distance."""
+
+    doc_id: str
+    chunk_index: int
+    title: str
+    text: str
+    distance: float
 
 
 def _persistent_client_class() -> Callable[..., Any]:
@@ -73,3 +85,32 @@ class VectorIndex:
             documents=documents,
             metadatas=metadatas,
         )
+
+    def query(
+        self,
+        vector: Sequence[float],
+        top_k: int,
+    ) -> list[SemanticMatch]:
+        if top_k <= 0:
+            raise ValueError(f"top_k must be positive: got {top_k}")
+
+        result = self.collection.query(
+            query_embeddings=[list(vector)],
+            n_results=top_k,
+        )
+
+        distances = (result.get("distances") or [[]])[0]
+        metadatas = (result.get("metadatas") or [[]])[0]
+
+        matches: list[SemanticMatch] = []
+        for metadata, distance in zip(metadatas, distances):
+            matches.append(
+                SemanticMatch(
+                    doc_id=metadata["doc_id"],
+                    chunk_index=metadata["chunk_index"],
+                    title=metadata["title"],
+                    text=metadata["text"],
+                    distance=float(distance),
+                )
+            )
+        return matches
