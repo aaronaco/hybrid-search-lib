@@ -30,6 +30,7 @@ class FakeCollection:
         self.add_calls: list[dict[str, Any]] = []
         self.query_calls: list[dict[str, Any]] = []
         self.query_response: dict[str, Any] | None = None
+        self.delete_calls: list[dict[str, Any]] = []
 
     def add(
         self,
@@ -63,6 +64,9 @@ class FakeCollection:
         if self.query_response is not None:
             return self.query_response
         return EMPTY_QUERY_RESPONSE
+
+    def delete(self, *, where: dict[str, Any]) -> None:
+        self.delete_calls.append({"where": dict(where)})
 
 
 class FakePersistentClient:
@@ -322,5 +326,59 @@ def test_query_raises_when_top_k_is_not_positive(
         index.query([0.0], top_k=0)
     with pytest.raises(ValueError):
         index.query([0.0], top_k=-1)
+
+    assert FakePersistentClient.instances == []
+
+
+def test_delete_document_forwards_doc_id_metadata_filter(
+    monkeypatch, tmp_path: Path
+) -> None:
+    use_fake_persistent_client(monkeypatch)
+    index = VectorIndex(tmp_path)
+
+    index.delete_document("doc-1")
+
+    collection = FakePersistentClient.instances[0].collection
+    assert collection.delete_calls == [{"where": {"doc_id": "doc-1"}}]
+
+
+def test_delete_document_filter_is_scoped_to_one_doc_id(
+    monkeypatch, tmp_path: Path
+) -> None:
+    use_fake_persistent_client(monkeypatch)
+    index = VectorIndex(tmp_path)
+
+    index.delete_document("doc-1")
+    index.delete_document("doc-2")
+
+    collection = FakePersistentClient.instances[0].collection
+    assert collection.delete_calls == [
+        {"where": {"doc_id": "doc-1"}},
+        {"where": {"doc_id": "doc-2"}},
+    ]
+
+
+def test_delete_document_with_unknown_id_does_not_raise(
+    monkeypatch, tmp_path: Path
+) -> None:
+    use_fake_persistent_client(monkeypatch)
+    index = VectorIndex(tmp_path)
+
+    index.delete_document("never-indexed")
+
+    collection = FakePersistentClient.instances[0].collection
+    assert collection.delete_calls == [{"where": {"doc_id": "never-indexed"}}]
+
+
+def test_delete_document_raises_on_empty_or_whitespace_doc_id(
+    monkeypatch, tmp_path: Path
+) -> None:
+    use_fake_persistent_client(monkeypatch)
+    index = VectorIndex(tmp_path)
+
+    with pytest.raises(ValueError):
+        index.delete_document("")
+    with pytest.raises(ValueError):
+        index.delete_document("   ")
 
     assert FakePersistentClient.instances == []

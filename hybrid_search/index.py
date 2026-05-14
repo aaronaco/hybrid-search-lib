@@ -114,3 +114,8 @@ class VectorIndex:
                 )
             )
         return matches
+
+    def delete_document(self, doc_id: str) -> None:
+        if not doc_id.strip():
+            raise ValueError("doc_id must be a non-empty string")
+        self.collection.delete(where={"doc_id": doc_id})
