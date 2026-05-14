@@ -10,6 +10,36 @@ def test_short_document_returns_single_chunk() -> None:
     assert out[0].title == "t"
 
 
+def test_title_only_document_returns_title_chunk() -> None:
+    out = chunk_document("d", "only title", "", 256, 0.15)
+
+    assert len(out) == 1
+    assert out[0].text == "only title"
+    assert out[0].title == "only title"
+    assert out[0].doc_id == "d"
+    assert out[0].chunk_index == 0
+
+
+def test_content_only_document_returns_content_chunk() -> None:
+    out = chunk_document("d", "", "only content", 256, 0.15)
+
+    assert len(out) == 1
+    assert out[0].text == "only content"
+    assert out[0].title == ""
+    assert out[0].doc_id == "d"
+    assert out[0].chunk_index == 0
+
+
+def test_both_empty_document_returns_deterministic_empty_chunk() -> None:
+    out = chunk_document("d", "", "", 256, 0.15)
+
+    assert len(out) == 1
+    assert out[0].text == ""
+    assert out[0].title == ""
+    assert out[0].doc_id == "d"
+    assert out[0].chunk_index == 0
+
+
 def test_document_at_threshold_returns_single_chunk() -> None:
     # 200 words with empty title -> exactly 200 words total, still one chunk
     out = chunk_document("d", "", " ".join(["w"] * 200), 256, 0.15)

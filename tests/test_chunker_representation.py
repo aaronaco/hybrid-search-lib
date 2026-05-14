@@ -23,3 +23,7 @@ def test_assemble_searchable_text_preserves_content_when_title_missing() -> None
 
 def test_assemble_searchable_text_preserves_title_when_content_missing() -> None:
     assert assemble_searchable_text("just title", "") == "just title"
+
+
+def test_assemble_searchable_text_returns_empty_string_when_both_missing() -> None:
+    assert assemble_searchable_text("", "") == ""
