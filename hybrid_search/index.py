@@ -1,8 +1,10 @@
 """Internal ChromaDB vector index wrapper."""
 
 from pathlib import Path
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from typing import Any
+
+from hybrid_search.chunker import Chunk
 
 DEFAULT_COLLECTION_NAME = "hybrid_search_chunks"
 
@@ -39,3 +41,35 @@ class VectorIndex:
                 name=self.collection_name
             )
         return self._collection
+
+    def add_chunks(
+        self,
+        chunks: Sequence[Chunk],
+        embeddings: Sequence[Sequence[float]],
+    ) -> None:
+        if len(chunks) != len(embeddings):
+            raise ValueError(
+                "chunks/embeddings length mismatch: "
+                f"{len(chunks)} chunks, {len(embeddings)} embeddings"
+            )
+        if not chunks:
+            return
+
+        ids = [f"{chunk.doc_id}:{chunk.chunk_index}" for chunk in chunks]
+        documents = [chunk.text for chunk in chunks]
+        embedding_payload = [list(vector) for vector in embeddings]
+        metadatas: list[dict[str, Any]] = [
+            {
+                "doc_id": chunk.doc_id,
+                "chunk_index": chunk.chunk_index,
+                "title": chunk.title,
+                "text": chunk.text,
+            }
+            for chunk in chunks
+        ]
+        self.collection.add(
+            ids=ids,
+            embeddings=embedding_payload,
+            documents=documents,
+            metadatas=metadatas,
+        )
