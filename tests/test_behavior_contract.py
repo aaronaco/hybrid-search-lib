@@ -209,3 +209,119 @@ def test_failed_delete_of_unknown_doc_id_does_not_corrupt_subsequent_operations(
         content="Welcome to bravo",
     )
     search.delete("doc-1")
+
+
+def test_add_with_persisted_doc_id_after_restart_raises_value_error(
+    tmp_path: Path,
+) -> None:
+    storage_path = tmp_path / "chroma-store"
+
+    writer = HybridSearch(storage_path=storage_path)
+    writer._embedder = FakeEmbedder([1.0, 0.0])  # type: ignore[assignment]
+    writer.add(doc_id="doc-1", title="Title", content="Content")
+    del writer
+
+    reader = HybridSearch(storage_path=storage_path)
+    reader._embedder = FakeEmbedder([1.0, 0.0])  # type: ignore[assignment]
+
+    with pytest.raises(ValueError):
+        reader.add(doc_id="doc-1", title="Other", content="Other")
+
+
+def test_delete_after_restart_removes_persisted_document_from_query_results(
+    tmp_path: Path,
+) -> None:
+    storage_path = tmp_path / "chroma-store"
+
+    writer = HybridSearch(storage_path=storage_path)
+    writer._embedder = FakeEmbedder([1.0, 0.0])  # type: ignore[assignment]
+    writer.add(
+        doc_id="doc-1",
+        title="Onboarding Guide",
+        content="Welcome to the alpha project",
+    )
+    del writer
+
+    reader = HybridSearch(storage_path=storage_path)
+    reader._embedder = FakeEmbedder([1.0, 0.0])  # type: ignore[assignment]
+
+    reader.delete("doc-1")
+
+    results = reader.query("alpha")
+    assert all(r.doc_id != "doc-1" for r in results)
+
+
+def test_update_after_restart_replaces_persisted_document_content(
+    tmp_path: Path,
+) -> None:
+    storage_path = tmp_path / "chroma-store"
+
+    writer = HybridSearch(storage_path=storage_path)
+    writer._embedder = FakeEmbedder([1.0, 0.0])  # type: ignore[assignment]
+    writer.add(
+        doc_id="doc-1",
+        title="Onboarding Guide",
+        content="Welcome to the alpha project",
+    )
+    del writer
+
+    reader = HybridSearch(storage_path=storage_path)
+    reader._embedder = FakeEmbedder([1.0, 0.0])  # type: ignore[assignment]
+
+    reader.update(
+        doc_id="doc-1",
+        title="New Title",
+        content="new content",
+    )
+
+    results = reader.query("new")
+    assert any(r.doc_id == "doc-1" for r in results)
+
+
+def test_query_after_restart_returns_all_three_component_contributions(
+    tmp_path: Path,
+) -> None:
+    storage_path = tmp_path / "chroma-store"
+    weights = {"semantic": 0.7, "bm25": 0.2, "fuzzy": 0.1}
+
+    writer = HybridSearch(storage_path=storage_path, weights=weights)
+    writer._embedder = FakeEmbedder([1.0, 0.0])  # type: ignore[assignment]
+    writer.add(doc_id="doc-1", title="Onboarding Guide", content="Welcome to alpha")
+    writer.add(doc_id="doc-2", title="Architecture Overview", content="Design notes")
+    writer.add(doc_id="doc-3", title="Style Guide", content="Conventions")
+    writer.add(doc_id="doc-4", title="Release Process", content="Tagged versions")
+    del writer
+
+    reader = HybridSearch(storage_path=storage_path, weights=weights)
+    reader._embedder = FakeEmbedder([1.0, 0.0])  # type: ignore[assignment]
+
+    results = reader.query("alpha")
+    matched = next((r for r in results if r.doc_id == "doc-1"), None)
+    assert matched is not None
+    assert matched.semantic_score > 0.0
+    assert matched.bm25_score > 0.0
+    assert matched.fuzzy_score >= 0.0
+
+
+def test_query_after_restart_with_typo_returns_fuzzy_only_keyword_contribution(
+    tmp_path: Path,
+) -> None:
+    storage_path = tmp_path / "chroma-store"
+    weights = {"semantic": 0.7, "bm25": 0.2, "fuzzy": 0.1}
+
+    writer = HybridSearch(storage_path=storage_path, weights=weights)
+    writer._embedder = FakeEmbedder([1.0, 0.0])  # type: ignore[assignment]
+    writer.add(doc_id="doc-1", title="Onboarding Guide", content="Welcome to alpha")
+    writer.add(doc_id="doc-2", title="Architecture Overview", content="Design notes")
+    writer.add(doc_id="doc-3", title="Style Guide", content="Conventions")
+    writer.add(doc_id="doc-4", title="Release Process", content="Tagged versions")
+    del writer
+
+    reader = HybridSearch(storage_path=storage_path, weights=weights)
+    reader._embedder = FakeEmbedder([1.0, 0.0])  # type: ignore[assignment]
+
+    results = reader.query("alph")
+    matched = next((r for r in results if r.doc_id == "doc-1"), None)
+    assert matched is not None
+    assert matched.fuzzy_score > 0.0
+    assert matched.bm25_score == 0.0
