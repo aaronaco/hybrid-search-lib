@@ -298,3 +298,89 @@ def test_constructor_rebuilt_fuzzy_returns_search_hit_for_persisted_term(
     assert len(matches) >= 1
     assert matches[0].doc_id == "doc-1"
     assert matches[0].score > 0.0
+
+
+def test_constructor_rebuild_skips_filtered_rows_for_bm25_and_fuzzy(
+    monkeypatch, tmp_path: Path
+) -> None:
+    collection = _FakeCollection(
+        get_response={
+            "ids": ["doc-1:0", "ghost", "blank", "none-row"],
+            "documents": ["alpha body", "ghost body", "blank body", "none body"],
+            "metadatas": [
+                {
+                    "doc_id": "doc-1",
+                    "chunk_index": 0,
+                    "title": "A",
+                    "text": "alpha body",
+                },
+                {"chunk_index": 0, "title": "Ghost", "text": "ghost body"},
+                {"doc_id": "", "chunk_index": 0, "title": "Blank", "text": "blank body"},
+                None,
+            ],
+        }
+    )
+    monkeypatch.setattr(
+        index_module,
+        "_persistent_client_class",
+        lambda: lambda path: _FakePersistentClient(path, collection),
+    )
+
+    search = HybridSearch(storage_path=tmp_path / "chroma-store")
+
+    assert search._document_ids == {"doc-1"}
+    assert search._bm25_index._chunk_keys == [("doc-1", 0)]
+    assert search._fuzzy_index._chunk_keys == [("doc-1", 0)]
+    assert search._bm25_index._metadata == {
+        ("doc-1", 0): {"title": "A", "text": "alpha body"},
+    }
+    assert search._fuzzy_index._metadata == {
+        ("doc-1", 0): {"title": "A", "text": "alpha body"},
+    }
+
+
+class _MinimalFakeEmbedder:
+    def embed(self, text: str) -> list[float]:
+        return [0.0]
+
+
+def test_constructor_with_empty_collection_yields_empty_bm25_fuzzy_and_query(
+    tmp_path: Path,
+) -> None:
+    search = HybridSearch(storage_path=tmp_path / "chroma-store")
+    search._embedder = _MinimalFakeEmbedder()  # type: ignore[assignment]
+
+    assert search._document_ids == set()
+    assert search._bm25_index._chunk_keys == []
+    assert search._fuzzy_index._chunk_keys == []
+    assert search.query("anything") == []
+
+
+def test_constructor_rebuild_keeps_per_chunk_entries_for_duplicate_doc_id(
+    monkeypatch, tmp_path: Path
+) -> None:
+    rows = [
+        {"doc_id": "doc-1", "chunk_index": 0, "title": "A", "text": "alpha body"},
+        {"doc_id": "doc-1", "chunk_index": 1, "title": "A", "text": "alpha follow"},
+        {"doc_id": "doc-2", "chunk_index": 0, "title": "B", "text": "beta body"},
+    ]
+    collection = _persisted_chunks_collection(rows)
+    monkeypatch.setattr(
+        index_module,
+        "_persistent_client_class",
+        lambda: lambda path: _FakePersistentClient(path, collection),
+    )
+
+    search = HybridSearch(storage_path=tmp_path / "chroma-store")
+
+    assert search._document_ids == {"doc-1", "doc-2"}
+    assert search._bm25_index._chunk_keys == [
+        ("doc-1", 0),
+        ("doc-1", 1),
+        ("doc-2", 0),
+    ]
+    assert search._fuzzy_index._chunk_keys == [
+        ("doc-1", 0),
+        ("doc-1", 1),
+        ("doc-2", 0),
+    ]
