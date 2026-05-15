@@ -68,6 +68,46 @@ for result in results:
 - `bm25_score`
 - `fuzzy_score`
 
+`score` is the final ranking score used to order returned documents.
+`semantic_score`, `bm25_score`, and `fuzzy_score` expose the public component
+scores that contributed to that final score. `matched_chunk` contains the text
+chunk that produced the best document-level result.
+
+## Lifecycle
+
+Use caller-managed document IDs for lifecycle operations. `add()` indexes a new
+document, `update()` replaces an existing document's title and content, and
+`delete()` removes an existing document.
+
+```python
+search.add(
+    doc_id="doc-3",
+    title="Release Checklist",
+    content="Review tests, update documentation, and publish the package.",
+)
+
+search.update(
+    doc_id="doc-3",
+    title="Release Checklist",
+    content="Review tests, update documentation, tag the release, and publish.",
+)
+
+search.delete("doc-3")
+```
+
+## Error Behavior
+
+The public API uses explicit exceptions for lifecycle mistakes:
+
+- `add()` with a duplicate `doc_id` raises `ValueError`.
+- `update()` with an unknown `doc_id` raises `KeyError`.
+- `delete()` with an unknown `doc_id` raises `KeyError`.
+- `query("")` and whitespace-only queries return `[]`.
+- `query(..., top_k=0)` and any other non-positive `top_k` raise
+  `ValueError`.
+- `query(..., weights=...)` raises `ValueError` when weights are missing a
+  required key, include an extra key, include a negative value, or sum to zero.
+
 ## First-Run Notes
 
 The default embedder uses the local
@@ -88,5 +128,5 @@ uv run ruff check
 uv run mypy hybrid_search tests
 ```
 
-Lifecycle behavior, ranking weights, persistence details, and runnable example
-files are documented in later INIT-010 stories.
+Ranking weight tuning, persistence details, and runnable example files are
+documented in later INIT-010 stories.
