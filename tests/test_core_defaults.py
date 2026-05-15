@@ -1,9 +1,24 @@
 from pathlib import Path
 
 from hybrid_search import HybridSearch
+from hybrid_search import core as core_module
 
 
-def test_constructor_uses_documented_defaults() -> None:
+class EmptyVectorIndex:
+    def __init__(self, storage_path):
+        self.storage_path = storage_path
+
+    def list_chunks(self):
+        return []
+
+
+def use_empty_vector_index(monkeypatch) -> None:
+    monkeypatch.setattr(core_module, "VectorIndex", EmptyVectorIndex)
+
+
+def test_constructor_uses_documented_defaults(monkeypatch) -> None:
+    use_empty_vector_index(monkeypatch)
+
     search = HybridSearch()
 
     assert search.storage_path == Path("~/.hybrid_search").expanduser().resolve()
@@ -21,7 +36,9 @@ def test_constructor_normalizes_explicit_storage_path(tmp_path: Path) -> None:
     assert search.storage_path == storage_path.expanduser().resolve()
 
 
-def test_default_weights_are_not_shared_between_instances() -> None:
+def test_default_weights_are_not_shared_between_instances(monkeypatch) -> None:
+    use_empty_vector_index(monkeypatch)
+
     first = HybridSearch()
     second = HybridSearch()
 

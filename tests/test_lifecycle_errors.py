@@ -1,18 +1,20 @@
+from pathlib import Path
+
 import pytest
 
 from hybrid_search import HybridSearch
 
 
-def test_add_duplicate_doc_id_raises_value_error() -> None:
-    search = HybridSearch()
+def test_add_duplicate_doc_id_raises_value_error(tmp_path: Path) -> None:
+    search = HybridSearch(storage_path=tmp_path)
     search.add("d", "t", "c")
 
     with pytest.raises(ValueError):
         search.add("d", "t", "c")
 
 
-def test_add_duplicate_does_not_corrupt_prior_state() -> None:
-    search = HybridSearch()
+def test_add_duplicate_does_not_corrupt_prior_state(tmp_path: Path) -> None:
+    search = HybridSearch(storage_path=tmp_path)
     search.add("d", "t", "c")
 
     with pytest.raises(ValueError):
@@ -21,22 +23,24 @@ def test_add_duplicate_does_not_corrupt_prior_state() -> None:
     assert search._documents["d"] == {"title": "t", "content": "c"}
 
 
-def test_update_unknown_doc_id_raises_key_error() -> None:
-    search = HybridSearch()
+def test_update_unknown_doc_id_raises_key_error(tmp_path: Path) -> None:
+    search = HybridSearch(storage_path=tmp_path)
 
     with pytest.raises(KeyError):
         search.update("nope", "t", "c")
 
 
-def test_delete_unknown_doc_id_raises_key_error() -> None:
-    search = HybridSearch()
+def test_delete_unknown_doc_id_raises_key_error(tmp_path: Path) -> None:
+    search = HybridSearch(storage_path=tmp_path)
 
     with pytest.raises(KeyError):
         search.delete("nope")
 
 
-def test_delete_unknown_doc_id_does_not_mutate_internal_indexes() -> None:
-    search = HybridSearch()
+def test_delete_unknown_doc_id_does_not_mutate_internal_indexes(
+    tmp_path: Path,
+) -> None:
+    search = HybridSearch(storage_path=tmp_path)
     search.add("d", "t", "c")
 
     bm25_keys_snapshot = list(search._bm25_index._chunk_keys)

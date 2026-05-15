@@ -40,6 +40,7 @@ class HybridSearch:
         
         self._embedder = Embedder()
         self._vector_index = VectorIndex(storage_path=self.storage_path)
+        self._recover_document_ids()
         self._bm25_index = BM25Index()
         self._fuzzy_index = FuzzyIndex()
 
@@ -115,6 +116,10 @@ class HybridSearch:
 
     def _has_document_id(self, doc_id: str) -> bool:
         return doc_id in self._document_ids
+
+    def _recover_document_ids(self) -> None:
+        for chunk in self._vector_index.list_chunks():
+            self._register_document_id(chunk.doc_id)
 
     def _remove_document(self, doc_id: str) -> None:
         self._unregister_document_id(doc_id)

@@ -2,6 +2,15 @@ from importlib.metadata import metadata, packages_distributions
 from pathlib import Path
 
 from hybrid_search import HybridSearch, SearchResult
+from hybrid_search import core as core_module
+
+
+class EmptyVectorIndex:
+    def __init__(self, storage_path):
+        self.storage_path = storage_path
+
+    def list_chunks(self):
+        return []
 
 
 def test_installed_metadata_exposes_public_imports() -> None:
@@ -11,7 +20,9 @@ def test_installed_metadata_exposes_public_imports() -> None:
     assert SearchResult.__name__ == "SearchResult"
 
 
-def test_default_construction_exposes_documented_configuration() -> None:
+def test_default_construction_exposes_documented_configuration(monkeypatch) -> None:
+    monkeypatch.setattr(core_module, "VectorIndex", EmptyVectorIndex)
+
     search = HybridSearch()
 
     assert search.storage_path == Path("~/.hybrid_search").expanduser().resolve()
