@@ -1,4 +1,5 @@
 from collections.abc import Sequence
+from dataclasses import fields
 from pathlib import Path
 
 import pytest
@@ -325,3 +326,52 @@ def test_query_after_restart_with_typo_returns_fuzzy_only_keyword_contribution(
     assert matched is not None
     assert matched.fuzzy_score > 0.0
     assert matched.bm25_score == 0.0
+
+
+def test_query_on_fresh_empty_index_returns_empty_list(tmp_path: Path) -> None:
+    search = HybridSearch(storage_path=tmp_path)
+    search._embedder = FakeEmbedder([1.0, 0.0])  # type: ignore[assignment]
+
+    assert search.query("anything") == []
+
+
+def test_add_with_empty_title_and_empty_content_does_not_raise(
+    tmp_path: Path,
+) -> None:
+    search = HybridSearch(storage_path=tmp_path)
+    search._embedder = FakeEmbedder([1.0, 0.0])  # type: ignore[assignment]
+
+    search.add(doc_id="doc-1", title="", content="")
+
+
+def test_add_with_empty_content_indexes_title_for_query(tmp_path: Path) -> None:
+    search = HybridSearch(storage_path=tmp_path)
+    search._embedder = FakeEmbedder([1.0, 0.0])  # type: ignore[assignment]
+
+    search.add(doc_id="doc-1", title="Some Title", content="")
+
+    results = search.query("title")
+    assert any(r.doc_id == "doc-1" for r in results)
+
+
+def test_search_result_has_exactly_documented_fields(tmp_path: Path) -> None:
+    search = HybridSearch(storage_path=tmp_path)
+    search._embedder = FakeEmbedder([1.0, 0.0])  # type: ignore[assignment]
+    search.add(doc_id="doc-1", title="Onboarding Guide", content="alpha content")
+
+    results = search.query("alpha")
+    assert len(results) >= 1
+    result = results[0]
+    assert isinstance(result, SearchResult)
+
+    expected = {
+        "doc_id": str,
+        "title": str,
+        "score": float,
+        "matched_chunk": str,
+        "semantic_score": float,
+        "bm25_score": float,
+        "fuzzy_score": float,
+    }
+    actual = {f.name: f.type for f in fields(SearchResult)}
+    assert actual == expected
