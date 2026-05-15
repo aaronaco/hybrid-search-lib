@@ -147,3 +147,65 @@ def test_query_with_whitespace_only_text_returns_empty_list(
     search.add(doc_id="doc-1", title="Title", content="Content")
 
     assert search.query("   ") == []
+
+
+def test_add_with_duplicate_doc_id_raises_value_error(tmp_path: Path) -> None:
+    search = HybridSearch(storage_path=tmp_path)
+    search._embedder = FakeEmbedder([1.0, 0.0])  # type: ignore[assignment]
+    search.add(doc_id="doc-1", title="Title", content="Content")
+
+    with pytest.raises(ValueError):
+        search.add(doc_id="doc-1", title="Other", content="Other")
+
+
+def test_delete_with_unknown_doc_id_raises_key_error(tmp_path: Path) -> None:
+    search = HybridSearch(storage_path=tmp_path)
+    search._embedder = FakeEmbedder([1.0, 0.0])  # type: ignore[assignment]
+
+    with pytest.raises(KeyError):
+        search.delete("ghost")
+
+
+def test_update_with_unknown_doc_id_raises_key_error(tmp_path: Path) -> None:
+    search = HybridSearch(storage_path=tmp_path)
+    search._embedder = FakeEmbedder([1.0, 0.0])  # type: ignore[assignment]
+
+    with pytest.raises(KeyError):
+        search.update(doc_id="ghost", title="Title", content="Content")
+
+
+def test_failed_duplicate_add_leaves_original_document_intact(
+    tmp_path: Path,
+) -> None:
+    search = HybridSearch(storage_path=tmp_path)
+    search._embedder = FakeEmbedder([1.0, 0.0])  # type: ignore[assignment]
+    search.add(doc_id="doc-1", title="Title", content="Content")
+
+    with pytest.raises(ValueError):
+        search.add(doc_id="doc-1", title="Other", content="Other")
+
+    search.delete("doc-1")
+
+
+def test_failed_delete_of_unknown_doc_id_does_not_corrupt_subsequent_operations(
+    tmp_path: Path,
+) -> None:
+    search = HybridSearch(storage_path=tmp_path)
+    search._embedder = FakeEmbedder([1.0, 0.0])  # type: ignore[assignment]
+    search.add(doc_id="doc-1", title="Onboarding Guide", content="Welcome to alpha")
+    search.add(doc_id="doc-2", title="Architecture Overview", content="Design notes")
+    search.add(doc_id="doc-3", title="Style Guide", content="Conventions")
+    search.add(doc_id="doc-4", title="Release Process", content="Tagged versions")
+
+    with pytest.raises(KeyError):
+        search.delete("ghost")
+
+    results = search.query("alpha")
+    assert any(r.doc_id == "doc-1" for r in results)
+
+    search.update(
+        doc_id="doc-1",
+        title="Onboarding Guide",
+        content="Welcome to bravo",
+    )
+    search.delete("doc-1")
