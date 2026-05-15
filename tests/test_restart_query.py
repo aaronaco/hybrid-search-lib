@@ -46,7 +46,7 @@ def test_query_returns_persisted_semantic_result_after_restart(
     assert "Welcome to the project" in matched.matched_chunk
 
 
-def test_query_after_restart_has_semantic_and_bm25_contributions_only(
+def test_query_after_restart_returns_all_component_contributions(
     tmp_path: Path,
 ) -> None:
     storage_path = tmp_path / "chroma-store"
@@ -84,11 +84,12 @@ def test_query_after_restart_has_semantic_and_bm25_contributions_only(
 
     matched = next((r for r in results if r.doc_id == "doc-1"), None)
     assert matched is not None
-    assert matched.fuzzy_score == 0.0
     assert matched.semantic_score > 0.0
     assert matched.bm25_score > 0.0
+    assert matched.fuzzy_score > 0.0
     expected = (
         weights["semantic"] * matched.semantic_score
         + weights["bm25"] * matched.bm25_score
+        + weights["fuzzy"] * matched.fuzzy_score
     )
     assert matched.score == pytest.approx(expected)

@@ -124,6 +124,7 @@ class HybridSearch:
             self._register_document_id(item.doc_id)
         chunks = _stored_chunks_to_chunks(stored)
         self._bm25_index.add_chunks(chunks)
+        self._fuzzy_index.add_chunks(chunks)
 
     def _remove_document(self, doc_id: str) -> None:
         self._unregister_document_id(doc_id)
