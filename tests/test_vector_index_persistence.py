@@ -3,7 +3,7 @@
 from pathlib import Path
 
 from hybrid_search.chunker import Chunk
-from hybrid_search.index import SemanticMatch, VectorIndex
+from hybrid_search.index import SemanticMatch, StoredChunk, VectorIndex
 
 
 def test_vector_index_creates_storage_directory_on_first_use(tmp_path: Path) -> None:
@@ -75,6 +75,34 @@ def test_chunk_metadata_fields_are_preserved_after_reinstantiation(
     assert isinstance(match.distance, float)
     assert match.distance >= 0.0
     assert isinstance(match, SemanticMatch)
+
+
+def test_stored_chunk_metadata_is_listed_after_reinstantiation(
+    tmp_path: Path,
+) -> None:
+    storage_path = tmp_path / "chroma-store"
+    chunks = [
+        Chunk(doc_id="doc-A", chunk_index=0, title="A", text="alpha chunk"),
+        Chunk(doc_id="doc-A", chunk_index=1, title="A", text="alpha follow-up"),
+        Chunk(doc_id="doc-B", chunk_index=0, title="B", text="beta chunk"),
+    ]
+    embeddings = [[1.0, 0.0], [0.5, 0.5], [0.0, 1.0]]
+
+    writer = VectorIndex(storage_path)
+    writer.add_chunks(chunks, embeddings)
+    del writer
+
+    reader = VectorIndex(storage_path)
+    stored_chunks = reader.list_chunks()
+
+    assert {
+        (chunk.doc_id, chunk.chunk_index, chunk.title, chunk.text)
+        for chunk in stored_chunks
+    } == {
+        (chunk.doc_id, chunk.chunk_index, chunk.title, chunk.text)
+        for chunk in chunks
+    }
+    assert all(isinstance(chunk, StoredChunk) for chunk in stored_chunks)
 
 
 def test_deleted_document_chunks_stay_removed_after_reinstantiation(

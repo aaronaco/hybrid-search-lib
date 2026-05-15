@@ -5,7 +5,12 @@ import pytest
 
 from hybrid_search import index as index_module
 from hybrid_search.chunker import Chunk
-from hybrid_search.index import DEFAULT_COLLECTION_NAME, SemanticMatch, VectorIndex
+from hybrid_search.index import (
+    DEFAULT_COLLECTION_NAME,
+    SemanticMatch,
+    StoredChunk,
+    VectorIndex,
+)
 
 
 EMPTY_QUERY_RESPONSE: dict[str, Any] = {
@@ -13,6 +18,11 @@ EMPTY_QUERY_RESPONSE: dict[str, Any] = {
     "distances": [[]],
     "metadatas": [[]],
     "documents": [[]],
+}
+EMPTY_GET_RESPONSE: dict[str, Any] = {
+    "ids": [],
+    "metadatas": [],
+    "documents": [],
 }
 
 
@@ -30,6 +40,8 @@ class FakeCollection:
         self.add_calls: list[dict[str, Any]] = []
         self.query_calls: list[dict[str, Any]] = []
         self.query_response: dict[str, Any] | None = None
+        self.get_calls: list[dict[str, Any]] = []
+        self.get_response: dict[str, Any] | None = None
         self.delete_calls: list[dict[str, Any]] = []
 
     def add(
@@ -64,6 +76,12 @@ class FakeCollection:
         if self.query_response is not None:
             return self.query_response
         return EMPTY_QUERY_RESPONSE
+
+    def get(self, *, include: list[str]) -> dict[str, Any]:
+        self.get_calls.append({"include": list(include)})
+        if self.get_response is not None:
+            return self.get_response
+        return EMPTY_GET_RESPONSE
 
     def delete(self, *, where: dict[str, Any]) -> None:
         self.delete_calls.append({"where": dict(where)})
@@ -328,6 +346,104 @@ def test_query_raises_when_top_k_is_not_positive(
         index.query([0.0], top_k=-1)
 
     assert FakePersistentClient.instances == []
+
+
+def test_list_chunks_returns_stored_chunk_metadata(
+    monkeypatch, tmp_path: Path
+) -> None:
+    use_fake_persistent_client(monkeypatch)
+    index = VectorIndex(tmp_path)
+    collection = index.collection
+    collection.get_response = {
+        "ids": ["doc-1:0", "doc-2:3"],
+        "documents": ["first body", "second body"],
+        "metadatas": [
+            {
+                "doc_id": "doc-1",
+                "chunk_index": 0,
+                "title": "Title A",
+                "text": "first body",
+            },
+            {
+                "doc_id": "doc-2",
+                "chunk_index": 3,
+                "title": "Title B",
+                "text": "second body",
+            },
+        ],
+    }
+
+    chunks = index.list_chunks()
+
+    assert chunks == [
+        StoredChunk(
+            doc_id="doc-1",
+            chunk_index=0,
+            title="Title A",
+            text="first body",
+        ),
+        StoredChunk(
+            doc_id="doc-2",
+            chunk_index=3,
+            title="Title B",
+            text="second body",
+        ),
+    ]
+
+
+def test_list_chunks_returns_empty_list_when_collection_is_empty(
+    monkeypatch, tmp_path: Path
+) -> None:
+    use_fake_persistent_client(monkeypatch)
+    index = VectorIndex(tmp_path)
+
+    assert index.list_chunks() == []
+
+
+def test_list_chunks_preserves_multiple_chunks_for_same_document(
+    monkeypatch, tmp_path: Path
+) -> None:
+    use_fake_persistent_client(monkeypatch)
+    index = VectorIndex(tmp_path)
+    collection = index.collection
+    collection.get_response = {
+        "ids": ["doc-1:0", "doc-1:1"],
+        "documents": ["first body", "second body"],
+        "metadatas": [
+            {
+                "doc_id": "doc-1",
+                "chunk_index": 0,
+                "title": "Title",
+                "text": "first body",
+            },
+            {
+                "doc_id": "doc-1",
+                "chunk_index": 1,
+                "title": "Title",
+                "text": "second body",
+            },
+        ],
+    }
+
+    chunks = index.list_chunks()
+
+    assert [(chunk.doc_id, chunk.chunk_index) for chunk in chunks] == [
+        ("doc-1", 0),
+        ("doc-1", 1),
+    ]
+
+
+def test_list_chunks_does_not_request_embeddings(
+    monkeypatch, tmp_path: Path
+) -> None:
+    use_fake_persistent_client(monkeypatch)
+    index = VectorIndex(tmp_path)
+
+    index.list_chunks()
+
+    collection = FakePersistentClient.instances[0].collection
+    assert collection.get_calls == [{"include": ["documents", "metadatas"]}]
+    assert "embeddings" not in collection.get_calls[0]["include"]
 
 
 def test_delete_document_forwards_doc_id_metadata_filter(

@@ -21,6 +21,16 @@ class SemanticMatch:
     distance: float
 
 
+@dataclass
+class StoredChunk:
+    """Internal stored chunk metadata recovered from the vector index."""
+
+    doc_id: str
+    chunk_index: int
+    title: str
+    text: str
+
+
 def _persistent_client_class() -> Callable[..., Any]:
     from chromadb import PersistentClient
 
@@ -114,6 +124,30 @@ class VectorIndex:
                 )
             )
         return matches
+
+    def list_chunks(self) -> list[StoredChunk]:
+        """Return stored chunk metadata without requesting embeddings."""
+
+        result = self.collection.get(include=["documents", "metadatas"])
+        documents = result.get("documents") or []
+        metadatas = result.get("metadatas") or []
+
+        chunks: list[StoredChunk] = []
+        for metadata, document in zip(metadatas, documents):
+            if not metadata:
+                continue
+            doc_id = str(metadata.get("doc_id", ""))
+            if not doc_id.strip():
+                continue
+            chunks.append(
+                StoredChunk(
+                    doc_id=doc_id,
+                    chunk_index=int(metadata["chunk_index"]),
+                    title=str(metadata.get("title", "")),
+                    text=str(metadata.get("text", document or "")),
+                )
+            )
+        return chunks
 
     def delete_document(self, doc_id: str) -> None:
         if not doc_id.strip():
