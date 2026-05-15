@@ -126,14 +126,11 @@ class VectorIndex:
         return matches
 
     def list_chunks(self) -> list[StoredChunk]:
-        """Return stored chunk metadata without requesting embeddings."""
-
         result = self.collection.get(include=["documents", "metadatas"])
-        documents = result.get("documents") or []
         metadatas = result.get("metadatas") or []
 
         chunks: list[StoredChunk] = []
-        for metadata, document in zip(metadatas, documents):
+        for metadata in metadatas:
             if not metadata:
                 continue
             doc_id = str(metadata.get("doc_id", ""))
@@ -144,7 +141,7 @@ class VectorIndex:
                     doc_id=doc_id,
                     chunk_index=int(metadata["chunk_index"]),
                     title=str(metadata.get("title", "")),
-                    text=str(metadata.get("text", document or "")),
+                    text=str(metadata.get("text", "")),
                 )
             )
         return chunks

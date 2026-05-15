@@ -446,6 +446,184 @@ def test_list_chunks_does_not_request_embeddings(
     assert "embeddings" not in collection.get_calls[0]["include"]
 
 
+def test_list_chunks_skips_row_when_doc_id_key_missing(
+    monkeypatch, tmp_path: Path
+) -> None:
+    use_fake_persistent_client(monkeypatch)
+    index = VectorIndex(tmp_path)
+    collection = index.collection
+    collection.get_response = {
+        "ids": ["bad", "doc-1:0"],
+        "documents": ["bad body", "good body"],
+        "metadatas": [
+            {"chunk_index": 0, "title": "No ID", "text": "bad body"},
+            {
+                "doc_id": "doc-1",
+                "chunk_index": 0,
+                "title": "Good",
+                "text": "good body",
+            },
+        ],
+    }
+
+    chunks = index.list_chunks()
+
+    assert chunks == [
+        StoredChunk(doc_id="doc-1", chunk_index=0, title="Good", text="good body"),
+    ]
+
+
+def test_list_chunks_skips_row_when_doc_id_is_empty_string(
+    monkeypatch, tmp_path: Path
+) -> None:
+    use_fake_persistent_client(monkeypatch)
+    index = VectorIndex(tmp_path)
+    collection = index.collection
+    collection.get_response = {
+        "ids": ["bad", "doc-1:0"],
+        "documents": ["bad body", "good body"],
+        "metadatas": [
+            {"doc_id": "", "chunk_index": 0, "title": "Empty", "text": "bad body"},
+            {
+                "doc_id": "doc-1",
+                "chunk_index": 0,
+                "title": "Good",
+                "text": "good body",
+            },
+        ],
+    }
+
+    chunks = index.list_chunks()
+
+    assert chunks == [
+        StoredChunk(doc_id="doc-1", chunk_index=0, title="Good", text="good body"),
+    ]
+
+
+def test_list_chunks_skips_row_when_doc_id_is_whitespace(
+    monkeypatch, tmp_path: Path
+) -> None:
+    use_fake_persistent_client(monkeypatch)
+    index = VectorIndex(tmp_path)
+    collection = index.collection
+    collection.get_response = {
+        "ids": ["bad", "doc-1:0"],
+        "documents": ["bad body", "good body"],
+        "metadatas": [
+            {"doc_id": "   ", "chunk_index": 0, "title": "Blank", "text": "bad body"},
+            {
+                "doc_id": "doc-1",
+                "chunk_index": 0,
+                "title": "Good",
+                "text": "good body",
+            },
+        ],
+    }
+
+    chunks = index.list_chunks()
+
+    assert chunks == [
+        StoredChunk(doc_id="doc-1", chunk_index=0, title="Good", text="good body"),
+    ]
+
+
+def test_list_chunks_skips_row_when_metadata_is_falsy(
+    monkeypatch, tmp_path: Path
+) -> None:
+    use_fake_persistent_client(monkeypatch)
+    index = VectorIndex(tmp_path)
+    collection = index.collection
+    collection.get_response = {
+        "ids": ["doc-1:0", "bad", "doc-2:0"],
+        "documents": ["alpha", "ghost", "beta"],
+        "metadatas": [
+            {
+                "doc_id": "doc-1",
+                "chunk_index": 0,
+                "title": "A",
+                "text": "alpha",
+            },
+            None,
+            {
+                "doc_id": "doc-2",
+                "chunk_index": 0,
+                "title": "B",
+                "text": "beta",
+            },
+        ],
+    }
+
+    chunks = index.list_chunks()
+
+    assert chunks == [
+        StoredChunk(doc_id="doc-1", chunk_index=0, title="A", text="alpha"),
+        StoredChunk(doc_id="doc-2", chunk_index=0, title="B", text="beta"),
+    ]
+
+
+def test_list_chunks_defaults_missing_title_to_empty_string(
+    monkeypatch, tmp_path: Path
+) -> None:
+    use_fake_persistent_client(monkeypatch)
+    index = VectorIndex(tmp_path)
+    collection = index.collection
+    collection.get_response = {
+        "ids": ["doc-1:0"],
+        "documents": ["body"],
+        "metadatas": [
+            {"doc_id": "doc-1", "chunk_index": 0, "text": "body"},
+        ],
+    }
+
+    chunks = index.list_chunks()
+
+    assert chunks == [
+        StoredChunk(doc_id="doc-1", chunk_index=0, title="", text="body"),
+    ]
+
+
+def test_list_chunks_defaults_missing_text_to_empty_string_when_document_empty(
+    monkeypatch, tmp_path: Path
+) -> None:
+    use_fake_persistent_client(monkeypatch)
+    index = VectorIndex(tmp_path)
+    collection = index.collection
+    collection.get_response = {
+        "ids": ["doc-1:0"],
+        "documents": [None],
+        "metadatas": [
+            {"doc_id": "doc-1", "chunk_index": 0, "title": "Title"},
+        ],
+    }
+
+    chunks = index.list_chunks()
+
+    assert chunks == [
+        StoredChunk(doc_id="doc-1", chunk_index=0, title="Title", text=""),
+    ]
+
+
+def test_list_chunks_defaults_missing_text_to_empty_string_even_when_document_present(
+    monkeypatch, tmp_path: Path
+) -> None:
+    use_fake_persistent_client(monkeypatch)
+    index = VectorIndex(tmp_path)
+    collection = index.collection
+    collection.get_response = {
+        "ids": ["doc-1:0"],
+        "documents": ["should not leak"],
+        "metadatas": [
+            {"doc_id": "doc-1", "chunk_index": 0, "title": "Title"},
+        ],
+    }
+
+    chunks = index.list_chunks()
+
+    assert chunks == [
+        StoredChunk(doc_id="doc-1", chunk_index=0, title="Title", text=""),
+    ]
+
+
 def test_delete_document_forwards_doc_id_metadata_filter(
     monkeypatch, tmp_path: Path
 ) -> None:
