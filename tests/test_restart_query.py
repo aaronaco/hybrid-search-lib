@@ -46,7 +46,7 @@ def test_query_returns_persisted_semantic_result_after_restart(
     assert "Welcome to the project" in matched.matched_chunk
 
 
-def test_query_after_restart_has_semantic_only_component_scores(
+def test_query_after_restart_has_semantic_and_bm25_contributions_only(
     tmp_path: Path,
 ) -> None:
     storage_path = tmp_path / "chroma-store"
@@ -60,6 +60,21 @@ def test_query_after_restart_has_semantic_only_component_scores(
         title="Onboarding Guide",
         content="Welcome to the project",
     )
+    writer.add(
+        doc_id="doc-2",
+        title="Architecture Overview",
+        content="Design notes about modules",
+    )
+    writer.add(
+        doc_id="doc-3",
+        title="Style Guide",
+        content="Conventions for naming and layout",
+    )
+    writer.add(
+        doc_id="doc-4",
+        title="Release Process",
+        content="How to ship a tagged version",
+    )
     del writer
 
     reader = HybridSearch(storage_path=storage_path, weights=weights)
@@ -69,7 +84,11 @@ def test_query_after_restart_has_semantic_only_component_scores(
 
     matched = next((r for r in results if r.doc_id == "doc-1"), None)
     assert matched is not None
-    assert matched.bm25_score == 0.0
     assert matched.fuzzy_score == 0.0
     assert matched.semantic_score > 0.0
-    assert matched.score == pytest.approx(weights["semantic"] * matched.semantic_score)
+    assert matched.bm25_score > 0.0
+    expected = (
+        weights["semantic"] * matched.semantic_score
+        + weights["bm25"] * matched.bm25_score
+    )
+    assert matched.score == pytest.approx(expected)

@@ -4,6 +4,7 @@ from typing import Any
 from hybrid_search import HybridSearch
 from hybrid_search import embedder as embedder_module
 from hybrid_search import index as index_module
+from hybrid_search.bm25 import BM25Index
 from hybrid_search.chunker import Chunk
 from hybrid_search.index import VectorIndex
 
@@ -122,3 +123,95 @@ def test_constructor_recovery_skips_malformed_rows_and_registers_valid_ids(
     search = HybridSearch(storage_path=tmp_path / "chroma-store")
 
     assert search._document_ids == {"doc-1", "doc-2"}
+
+
+def _persisted_chunks_collection(rows: list[dict[str, Any]]) -> _FakeCollection:
+    return _FakeCollection(
+        get_response={
+            "ids": [f"{row['doc_id']}:{row['chunk_index']}" for row in rows],
+            "documents": [row["text"] for row in rows],
+            "metadatas": rows,
+        }
+    )
+
+
+def test_constructor_rebuilds_bm25_corpus_from_persisted_chunks(
+    monkeypatch, tmp_path: Path
+) -> None:
+    rows = [
+        {"doc_id": "doc-1", "chunk_index": 0, "title": "A", "text": "alpha body"},
+        {"doc_id": "doc-2", "chunk_index": 0, "title": "B", "text": "beta body"},
+    ]
+    collection = _persisted_chunks_collection(rows)
+    monkeypatch.setattr(
+        index_module,
+        "_persistent_client_class",
+        lambda: lambda path: _FakePersistentClient(path, collection),
+    )
+
+    search = HybridSearch(storage_path=tmp_path / "chroma-store")
+
+    assert search._bm25_index._chunk_keys == [("doc-1", 0), ("doc-2", 0)]
+    assert search._bm25_index._metadata == {
+        ("doc-1", 0): {"title": "A", "text": "alpha body"},
+        ("doc-2", 0): {"title": "B", "text": "beta body"},
+    }
+
+
+def test_constructor_bm25_rebuild_matches_live_add_chunks_parity(
+    monkeypatch, tmp_path: Path
+) -> None:
+    rows: list[dict[str, Any]] = [
+        {"doc_id": "doc-1", "chunk_index": 0, "title": "A", "text": "alpha body"},
+        {"doc_id": "doc-1", "chunk_index": 1, "title": "A", "text": "alpha follow"},
+        {"doc_id": "doc-2", "chunk_index": 0, "title": "B", "text": "beta body"},
+    ]
+    collection = _persisted_chunks_collection(rows)
+    monkeypatch.setattr(
+        index_module,
+        "_persistent_client_class",
+        lambda: lambda path: _FakePersistentClient(path, collection),
+    )
+
+    search = HybridSearch(storage_path=tmp_path / "chroma-store")
+
+    expected = BM25Index()
+    expected.add_chunks(
+        [
+            Chunk(
+                doc_id=row["doc_id"],
+                chunk_index=row["chunk_index"],
+                title=row["title"],
+                text=row["text"],
+            )
+            for row in rows
+        ]
+    )
+
+    assert search._bm25_index._corpus_tokens == expected._corpus_tokens
+    assert search._bm25_index._chunk_keys == expected._chunk_keys
+    assert search._bm25_index._metadata == expected._metadata
+
+
+def test_constructor_rebuilt_bm25_returns_search_hit_for_persisted_term(
+    monkeypatch, tmp_path: Path
+) -> None:
+    rows = [
+        {"doc_id": "doc-1", "chunk_index": 0, "title": "A", "text": "alpha body"},
+        {"doc_id": "doc-2", "chunk_index": 0, "title": "B", "text": "gamma body"},
+        {"doc_id": "doc-3", "chunk_index": 0, "title": "C", "text": "delta body"},
+        {"doc_id": "doc-4", "chunk_index": 0, "title": "D", "text": "epsilon body"},
+    ]
+    collection = _persisted_chunks_collection(rows)
+    monkeypatch.setattr(
+        index_module,
+        "_persistent_client_class",
+        lambda: lambda path: _FakePersistentClient(path, collection),
+    )
+
+    search = HybridSearch(storage_path=tmp_path / "chroma-store")
+    matches = search._bm25_index.search("alpha", top_k=5)
+
+    assert len(matches) >= 1
+    assert matches[0].doc_id == "doc-1"
+    assert matches[0].score > 0.0
