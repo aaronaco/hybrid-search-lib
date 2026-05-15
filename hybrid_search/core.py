@@ -10,6 +10,8 @@ from hybrid_search.embedder import Embedder
 from hybrid_search.fuzzy import FuzzyIndex
 from hybrid_search.index import VectorIndex
 from hybrid_search.pipeline import embed_chunks
+from hybrid_search.ranker import rank
+from hybrid_search.result import SearchResult
 
 _DEFAULT_STORAGE_PATH = Path("~/.hybrid_search")
 _DEFAULT_WEIGHTS = MappingProxyType({"semantic": 0.4, "bm25": 0.4, "fuzzy": 0.2})
@@ -69,6 +71,41 @@ class HybridSearch:
         if not self._has_document_id(doc_id):
             raise KeyError(f"Document not found: {doc_id}")
         self._remove_document(doc_id)
+
+    def query(self, text: str) -> list[SearchResult]:
+        if self.top_k <= 0:
+            raise ValueError(f"top_k must be positive: got {self.top_k}")
+        weight_keys = set(self.weights.keys())
+        if weight_keys != {"semantic", "bm25", "fuzzy"}:
+            raise ValueError(
+                "weights must contain exactly keys 'semantic', 'bm25', 'fuzzy': "
+                f"got {sorted(weight_keys)}"
+            )
+        if any(v < 0 for v in self.weights.values()):
+            raise ValueError(
+                f"weights values must be non-negative: got {dict(self.weights)}"
+            )
+        if sum(self.weights.values()) <= 0:
+            raise ValueError(
+                f"weights must sum to a positive number: got {dict(self.weights)}"
+            )
+
+        if not text.strip():
+            return []
+
+        candidate_size = max(self.top_k * 4, 20)
+        query_vector = self._embedder.embed(text)
+        semantic_matches = self._vector_index.query(query_vector, top_k=candidate_size)
+        bm25_matches = self._bm25_index.search(text, top_k=candidate_size)
+        fuzzy_matches = self._fuzzy_index.search(text, top_k=candidate_size)
+
+        return rank(
+            semantic_matches,
+            bm25_matches,
+            fuzzy_matches,
+            self.weights,
+            self.top_k,
+        )
 
     def _register_document_id(self, doc_id: str) -> None:
         self._document_ids.add(doc_id)
