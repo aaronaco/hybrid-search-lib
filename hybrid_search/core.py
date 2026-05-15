@@ -1,14 +1,15 @@
 """Public facade for local hybrid search."""
 
+from collections.abc import Iterable
 from pathlib import Path
 from types import MappingProxyType
 from typing import Mapping
 
 from hybrid_search.bm25 import BM25Index
-from hybrid_search.chunker import chunk_document
+from hybrid_search.chunker import Chunk, chunk_document
 from hybrid_search.embedder import Embedder
 from hybrid_search.fuzzy import FuzzyIndex
-from hybrid_search.index import VectorIndex
+from hybrid_search.index import StoredChunk, VectorIndex
 from hybrid_search.pipeline import embed_chunks
 from hybrid_search.ranker import rank
 from hybrid_search.result import SearchResult
@@ -127,3 +128,16 @@ class HybridSearch:
         self._vector_index.delete_document(doc_id)
         self._bm25_index.remove_document(doc_id)
         self._fuzzy_index.remove_document(doc_id)
+
+
+def _stored_chunk_to_chunk(stored: StoredChunk) -> Chunk:
+    return Chunk(
+        doc_id=stored.doc_id,
+        chunk_index=stored.chunk_index,
+        title=stored.title,
+        text=stored.text,
+    )
+
+
+def _stored_chunks_to_chunks(stored: Iterable[StoredChunk]) -> list[Chunk]:
+    return [_stored_chunk_to_chunk(item) for item in stored]
