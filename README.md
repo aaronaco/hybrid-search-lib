@@ -108,6 +108,18 @@ The public API uses explicit exceptions for lifecycle mistakes:
 - `query(..., weights=...)` raises `ValueError` when weights are missing a
   required key, include an extra key, include a negative value, or sum to zero.
 
+## Runnable Example
+
+Run the basic example from a local clone with uv:
+
+```powershell
+uv run examples/basic_usage.py
+```
+
+The example uses a temporary storage directory, so it does not leave index
+files in the project root. The first run may initialize the local embedding
+model and populate the sentence-transformers cache.
+
 ## First-Run Notes
 
 The default embedder uses the local
