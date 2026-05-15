@@ -93,3 +93,51 @@ def test_query_after_restart_returns_all_component_contributions(
         + weights["fuzzy"] * matched.fuzzy_score
     )
     assert matched.score == pytest.approx(expected)
+
+
+def test_query_after_restart_with_typo_returns_fuzzy_contribution(
+    tmp_path: Path,
+) -> None:
+    storage_path = tmp_path / "chroma-store"
+    fixed_vector = [1.0, 0.0]
+    weights = {"semantic": 0.7, "bm25": 0.2, "fuzzy": 0.1}
+
+    writer = HybridSearch(storage_path=storage_path, weights=weights)
+    writer._embedder = FakeEmbedder(fixed_vector)  # type: ignore[assignment]
+    writer.add(
+        doc_id="doc-1",
+        title="Onboarding Guide",
+        content="Welcome to the project",
+    )
+    writer.add(
+        doc_id="doc-2",
+        title="Architecture Overview",
+        content="Design notes about modules",
+    )
+    writer.add(
+        doc_id="doc-3",
+        title="Style Guide",
+        content="Conventions for naming and layout",
+    )
+    writer.add(
+        doc_id="doc-4",
+        title="Release Process",
+        content="How to ship a tagged version",
+    )
+    del writer
+
+    reader = HybridSearch(storage_path=storage_path, weights=weights)
+    reader._embedder = FakeEmbedder(fixed_vector)  # type: ignore[assignment]
+
+    results = reader.query("welcm")
+
+    matched = next((r for r in results if r.doc_id == "doc-1"), None)
+    assert matched is not None
+    assert matched.fuzzy_score > 0.0
+    assert matched.bm25_score == 0.0
+    assert matched.semantic_score > 0.0
+    expected = (
+        weights["semantic"] * matched.semantic_score
+        + weights["fuzzy"] * matched.fuzzy_score
+    )
+    assert matched.score == pytest.approx(expected)
