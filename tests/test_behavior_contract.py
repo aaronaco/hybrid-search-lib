@@ -1,6 +1,8 @@
 from collections.abc import Sequence
 from pathlib import Path
 
+import pytest
+
 from hybrid_search import HybridSearch, SearchResult
 
 
@@ -59,3 +61,89 @@ def test_lifecycle_add_query_update_delete_round_trip_through_public_api(
 
     results_after_delete = search.query("bravo")
     assert all(r.doc_id != "doc-1" for r in results_after_delete)
+
+
+def test_query_raises_value_error_when_top_k_is_zero(tmp_path: Path) -> None:
+    search = HybridSearch(storage_path=tmp_path, top_k=0)
+    search._embedder = FakeEmbedder([1.0, 0.0])  # type: ignore[assignment]
+
+    with pytest.raises(ValueError):
+        search.query("anything")
+
+
+def test_query_raises_value_error_when_top_k_is_negative(tmp_path: Path) -> None:
+    search = HybridSearch(storage_path=tmp_path, top_k=-1)
+    search._embedder = FakeEmbedder([1.0, 0.0])  # type: ignore[assignment]
+
+    with pytest.raises(ValueError):
+        search.query("anything")
+
+
+def test_query_raises_value_error_when_weights_missing_required_key(
+    tmp_path: Path,
+) -> None:
+    search = HybridSearch(
+        storage_path=tmp_path,
+        weights={"semantic": 1.0},
+    )
+    search._embedder = FakeEmbedder([1.0, 0.0])  # type: ignore[assignment]
+
+    with pytest.raises(ValueError):
+        search.query("anything")
+
+
+def test_query_raises_value_error_when_weights_has_extra_key(
+    tmp_path: Path,
+) -> None:
+    search = HybridSearch(
+        storage_path=tmp_path,
+        weights={"semantic": 0.5, "bm25": 0.5, "fuzzy": 0.0, "extra": 0.1},
+    )
+    search._embedder = FakeEmbedder([1.0, 0.0])  # type: ignore[assignment]
+
+    with pytest.raises(ValueError):
+        search.query("anything")
+
+
+def test_query_raises_value_error_when_weights_has_negative_value(
+    tmp_path: Path,
+) -> None:
+    search = HybridSearch(
+        storage_path=tmp_path,
+        weights={"semantic": -0.1, "bm25": 0.5, "fuzzy": 0.6},
+    )
+    search._embedder = FakeEmbedder([1.0, 0.0])  # type: ignore[assignment]
+
+    with pytest.raises(ValueError):
+        search.query("anything")
+
+
+def test_query_raises_value_error_when_weights_sum_to_non_positive(
+    tmp_path: Path,
+) -> None:
+    search = HybridSearch(
+        storage_path=tmp_path,
+        weights={"semantic": 0.0, "bm25": 0.0, "fuzzy": 0.0},
+    )
+    search._embedder = FakeEmbedder([1.0, 0.0])  # type: ignore[assignment]
+
+    with pytest.raises(ValueError):
+        search.query("anything")
+
+
+def test_query_with_empty_text_returns_empty_list(tmp_path: Path) -> None:
+    search = HybridSearch(storage_path=tmp_path)
+    search._embedder = FakeEmbedder([1.0, 0.0])  # type: ignore[assignment]
+    search.add(doc_id="doc-1", title="Title", content="Content")
+
+    assert search.query("") == []
+
+
+def test_query_with_whitespace_only_text_returns_empty_list(
+    tmp_path: Path,
+) -> None:
+    search = HybridSearch(storage_path=tmp_path)
+    search._embedder = FakeEmbedder([1.0, 0.0])  # type: ignore[assignment]
+    search.add(doc_id="doc-1", title="Title", content="Content")
+
+    assert search.query("   ") == []
