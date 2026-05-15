@@ -131,6 +131,24 @@ def test_remove_document_drops_all_chunks_for_doc_id(
     assert index._metadata == {("doc-B", 0): {"title": "B0", "text": "b zero"}}
 
 
+def test_remove_unknown_document_is_noop(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    use_fake_rapidfuzz(monkeypatch)
+    index = FuzzyIndex()
+    index.add_chunks(_three_chunks())
+    snapshot_texts = list(index._indexed_texts)
+    snapshot_keys = list(index._chunk_keys)
+    snapshot_metadata = dict(index._metadata)
+
+    index.remove_document("ghost")
+
+    assert index._indexed_texts == snapshot_texts
+    assert index._chunk_keys == snapshot_keys
+    assert index._metadata == snapshot_metadata
+    assert FakeRapidFuzzProcess.instances == []
+
+
 def test_search_calls_extract_and_maps_results_correctly(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -167,6 +185,20 @@ def test_search_raises_when_top_k_is_not_positive(
     use_fake_rapidfuzz(monkeypatch)
     index = FuzzyIndex()
     index.add_chunks(_three_chunks())
+
+    with pytest.raises(ValueError):
+        index.search("query", top_k=0)
+    with pytest.raises(ValueError):
+        index.search("query", top_k=-1)
+
+    assert FakeRapidFuzzProcess.instances == []
+
+
+def test_search_raises_when_top_k_is_not_positive_on_empty_corpus(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    use_fake_rapidfuzz(monkeypatch)
+    index = FuzzyIndex()
 
     with pytest.raises(ValueError):
         index.search("query", top_k=0)

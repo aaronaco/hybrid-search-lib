@@ -33,3 +33,21 @@ def test_delete_unknown_doc_id_raises_key_error() -> None:
 
     with pytest.raises(KeyError):
         search.delete("nope")
+
+
+def test_delete_unknown_doc_id_does_not_mutate_internal_indexes() -> None:
+    search = HybridSearch()
+    search.add("d", "t", "c")
+
+    bm25_keys_snapshot = list(search._bm25_index._chunk_keys)
+    bm25_tokens_snapshot = [list(toks) for toks in search._bm25_index._corpus_tokens]
+    fuzzy_keys_snapshot = list(search._fuzzy_index._chunk_keys)
+    fuzzy_texts_snapshot = list(search._fuzzy_index._indexed_texts)
+
+    with pytest.raises(KeyError):
+        search.delete("ghost")
+
+    assert search._bm25_index._chunk_keys == bm25_keys_snapshot
+    assert search._bm25_index._corpus_tokens == bm25_tokens_snapshot
+    assert search._fuzzy_index._chunk_keys == fuzzy_keys_snapshot
+    assert search._fuzzy_index._indexed_texts == fuzzy_texts_snapshot

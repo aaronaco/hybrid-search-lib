@@ -209,6 +209,20 @@ def test_search_raises_when_top_k_is_not_positive(
     assert FakeBM25Okapi.instances == []
 
 
+def test_search_raises_when_top_k_is_not_positive_on_empty_corpus(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    use_fake_bm25_okapi(monkeypatch)
+    index = BM25Index()
+
+    with pytest.raises(ValueError):
+        index.search("body", top_k=0)
+    with pytest.raises(ValueError):
+        index.search("body", top_k=-1)
+
+    assert FakeBM25Okapi.instances == []
+
+
 def test_search_empty_query_returns_empty_list(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
