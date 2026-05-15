@@ -120,15 +120,71 @@ The example uses a temporary storage directory, so it does not leave index
 files in the project root. The first run may initialize the local embedding
 model and populate the sentence-transformers cache.
 
-## First-Run Notes
+## Configuration
+
+`HybridSearch` exposes the main tuning controls through its constructor:
+
+```python
+search = HybridSearch(
+    storage_path="./my_index",
+    chunk_size=256,
+    chunk_overlap=0.15,
+    weights={"semantic": 0.4, "bm25": 0.4, "fuzzy": 0.2},
+    top_k=5,
+)
+```
+
+- `storage_path` controls where the local index is stored. The default is
+  `~/.hybrid_search`.
+- `chunk_size` is an approximate word count per chunk. The default is `256`.
+- `chunk_overlap` controls overlap between adjacent chunks. The default is
+  `0.15`.
+- `weights` must contain exactly `semantic`, `bm25`, and `fuzzy` keys with
+  non-negative values that sum to a positive number.
+- `top_k` controls the maximum number of document results returned by
+  `query()`. The default is `5`.
+
+## Ranking and Tuning
+
+`score` is the weighted sum of the public component scores:
+
+```text
+score = semantic_weight * semantic_score
+      + bm25_weight * bm25_score
+      + fuzzy_weight * fuzzy_score
+```
+
+Increase `weights["semantic"]` to favor semantic similarity, increase
+`weights["bm25"]` to favor exact keyword overlap, and increase
+`weights["fuzzy"]` to favor typo-tolerant or partial matches. Component scores
+are useful for inspection and tuning, but exact relevance depends on the corpus
+and query.
+
+`top_k` sets the maximum number of document results returned. During query
+processing, the library gathers a larger candidate pool with
+`max(top_k * 4, 20)` before returning the best `top_k` document results.
+
+## Persistence and Restart Behavior
+
+Indexes are stored under `storage_path`. Reusing the same path lets a new
+`HybridSearch` instance recover persisted search metadata across restarts.
+Startup recovery rebuilds the derived keyword and fuzzy search state from the
+persisted metadata, so exact, semantic, and typo-tolerant signals can contribute
+after a restart without caller-managed reload code.
+
+Use an explicit `storage_path` for application data you want to keep. Temporary
+paths are useful for examples and tests, but their indexes disappear when the
+temporary directory is removed.
+
+## Local Model Behavior
 
 The default embedder uses the local
 `sentence-transformers/all-MiniLM-L6-v2` model through sentence-transformers.
 The first indexing or query workflow that needs embeddings may initialize the
 model and populate the local model cache.
 
-Indexes are stored under `storage_path`. Reusing the same path lets a new
-`HybridSearch` instance recover persisted search metadata across restarts.
+Normal indexing and querying use local storage and local model execution. The
+library does not require a managed cloud search service for these workflows.
 
 ## Development Checks
 
@@ -139,6 +195,3 @@ uv run pytest
 uv run ruff check
 uv run mypy hybrid_search tests
 ```
-
-Ranking weight tuning, persistence details, and runnable example files are
-documented in later INIT-010 stories.
