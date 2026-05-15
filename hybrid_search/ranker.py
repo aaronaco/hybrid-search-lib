@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from hybrid_search.bm25 import BM25Match
 from hybrid_search.fuzzy import FuzzyMatch
 from hybrid_search.index import SemanticMatch
+from hybrid_search.result import SearchResult
 
 ChunkKey = tuple[str, int]
 NormalizedCandidate = tuple[ChunkKey, float]
@@ -109,3 +110,39 @@ def fuse_candidates(
             )
         )
     return fused
+
+
+def rank(
+    semantic: Sequence[SemanticMatch],
+    bm25: Sequence[BM25Match],
+    fuzzy: Sequence[FuzzyMatch],
+    weights: Mapping[str, float],
+    top_k: int,
+) -> list[SearchResult]:
+    fused = fuse_candidates(semantic, bm25, fuzzy, weights)
+    if not fused:
+        return []
+
+    winners: dict[str, FusedChunk] = {}
+    for chunk in fused:
+        existing = winners.get(chunk.doc_id)
+        if existing is None or chunk.final_score > existing.final_score:
+            winners[chunk.doc_id] = chunk
+
+    surviving = [c for c in winners.values() if c.final_score > 0.0]
+    # Stable sort preserves first-seen order on equal final_score.
+    surviving.sort(key=lambda c: c.final_score, reverse=True)
+    surviving = surviving[:top_k]
+
+    return [
+        SearchResult(
+            doc_id=c.doc_id,
+            title=c.title,
+            score=c.final_score,
+            matched_chunk=c.text,
+            semantic_score=c.semantic_score,
+            bm25_score=c.bm25_score,
+            fuzzy_score=c.fuzzy_score,
+        )
+        for c in surviving
+    ]

@@ -1,6 +1,5 @@
 """Public facade for local hybrid search."""
 
-from dataclasses import dataclass
 from pathlib import Path
 from types import MappingProxyType
 from typing import Mapping
@@ -14,19 +13,6 @@ from hybrid_search.pipeline import embed_chunks
 
 _DEFAULT_STORAGE_PATH = Path("~/.hybrid_search")
 _DEFAULT_WEIGHTS = MappingProxyType({"semantic": 0.4, "bm25": 0.4, "fuzzy": 0.2})
-
-
-@dataclass
-class SearchResult:
-    """Search result with final and component scores."""
-
-    doc_id: str
-    title: str
-    score: float
-    matched_chunk: str
-    semantic_score: float
-    bm25_score: float
-    fuzzy_score: float
 
 
 class HybridSearch:
