@@ -195,3 +195,8 @@ uv run pytest
 uv run ruff check
 uv run mypy hybrid_search tests
 ```
+
+## Contributing
+
+See `CONTRIBUTING.md` for the validation gate, the public behavior contract
+location, and the examples policy.
