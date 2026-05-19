@@ -103,10 +103,11 @@ The public API uses explicit exceptions for lifecycle mistakes:
 - `update()` with an unknown `doc_id` raises `KeyError`.
 - `delete()` with an unknown `doc_id` raises `KeyError`.
 - `query("")` and whitespace-only queries return `[]`.
-- `query(..., top_k=0)` and any other non-positive `top_k` raise
-  `ValueError`.
-- `query(..., weights=...)` raises `ValueError` when weights are missing a
-  required key, include an extra key, include a negative value, or sum to zero.
+- `query()` raises `ValueError` when the instance is configured with a
+  non-positive `top_k`.
+- `query()` raises `ValueError` when the instance is configured with malformed
+  `weights`: missing required keys, extra keys, negative values, or a
+  non-positive sum.
 
 ## Runnable Example
 
