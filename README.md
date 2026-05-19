@@ -187,6 +187,54 @@ model and populate the local model cache.
 Normal indexing and querying use local storage and local model execution. The
 library does not require a managed cloud search service for these workflows.
 
+### Choosing an Embedding Model
+
+Pass `embedding_model` to select a different sentence-transformers model by
+name or local filesystem path. The default embedder is constructed lazily, so
+construction still does not load the model.
+
+```python
+search = HybridSearch(
+    storage_path="./my_index",
+    embedding_model="sentence-transformers/all-mpnet-base-v2",
+)
+```
+
+A local path also works:
+
+```python
+search = HybridSearch(
+    storage_path="./my_index",
+    embedding_model="/models/all-MiniLM-L6-v2",
+)
+```
+
+### Providing a Custom Embedder
+
+Pass `embedder=` to take full control of embedding. This is the supported path
+for advanced device, cache, and offline control. Use it instead of mirroring
+sentence-transformers-specific kwargs on `HybridSearch`. Any object that
+implements `embed(text) -> list[float]` and `embed_batch(texts) -> list[list[float]]`
+works.
+
+```python
+class MyEmbedder:
+    def embed(self, text: str) -> list[float]:
+        ...
+
+    def embed_batch(self, texts):
+        return [self.embed(t) for t in texts]
+
+
+search = HybridSearch(
+    storage_path="./my_index",
+    embedder=MyEmbedder(),
+)
+```
+
+`embedder=` and `embedding_model=` are alternatives — supply one or the
+other, not both.
+
 ## Development Checks
 
 Use the uv-managed project environment for validation:
