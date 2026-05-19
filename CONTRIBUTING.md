@@ -9,7 +9,7 @@ Run the full validation triad before submitting changes:
 ```powershell
 uv run pytest
 uv run ruff check
-uv run mypy hybrid_search tests
+uv run mypy src/hybrid_search tests
 ```
 
 All three must pass.
