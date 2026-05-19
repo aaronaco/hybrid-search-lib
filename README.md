@@ -193,7 +193,7 @@ Use the uv-managed project environment for validation:
 ```powershell
 uv run pytest
 uv run ruff check
-uv run mypy hybrid_search tests
+uv run mypy src/hybrid_search tests
 ```
 
 ## Contributing
