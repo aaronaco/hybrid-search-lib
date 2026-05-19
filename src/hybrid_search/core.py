@@ -7,7 +7,7 @@ from typing import Mapping
 
 from hybrid_search.bm25 import BM25Index
 from hybrid_search.chunker import Chunk, chunk_document
-from hybrid_search.embedder import Embedder, EmbedderLike
+from hybrid_search.embedder import DEFAULT_EMBEDDING_MODEL, Embedder, EmbedderLike
 from hybrid_search.fuzzy import FuzzyIndex
 from hybrid_search.index import StoredChunk, VectorIndex
 from hybrid_search.pipeline import embed_chunks
@@ -28,6 +28,7 @@ class HybridSearch:
         chunk_overlap: float = 0.15,
         weights: Mapping[str, float] | None = None,
         top_k: int = 5,
+        embedding_model: str = DEFAULT_EMBEDDING_MODEL,
         embedder: EmbedderLike | None = None,
     ) -> None:
         configured_path = _DEFAULT_STORAGE_PATH if storage_path is None else Path(storage_path)
@@ -39,8 +40,20 @@ class HybridSearch:
         self.top_k = top_k
         self._document_ids: set[str] = set()
         self._documents: dict[str, dict[str, str]] = {}
-        
-        self._embedder = Embedder() if embedder is None else embedder
+
+        if not embedding_model.strip():
+            raise ValueError(
+                f"embedding_model must be a non-empty string: got {embedding_model!r}"
+            )
+        if embedder is not None and embedding_model != DEFAULT_EMBEDDING_MODEL:
+            raise ValueError(
+                "embedder and embedding_model cannot be supplied together; "
+                "pass one or the other"
+            )
+
+        self._embedder = (
+            Embedder(model_name=embedding_model) if embedder is None else embedder
+        )
         self._vector_index = VectorIndex(storage_path=self.storage_path)
         self._bm25_index = BM25Index()
         self._fuzzy_index = FuzzyIndex()

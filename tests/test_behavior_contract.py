@@ -1,4 +1,4 @@
-from collections.abc import Sequence
+from collections.abc import Iterable
 from dataclasses import fields
 from pathlib import Path
 
@@ -14,7 +14,7 @@ class FakeEmbedder:
     def embed(self, text: str) -> list[float]:
         return list(self._vector)
 
-    def embed_batch(self, texts: Sequence[str]) -> list[list[float]]:
+    def embed_batch(self, texts: Iterable[str]) -> list[list[float]]:
         return [list(self._vector) for _ in texts]
 
 
@@ -375,3 +375,80 @@ def test_search_result_has_exactly_documented_fields(tmp_path: Path) -> None:
     }
     actual = {f.name: f.type for f in fields(SearchResult)}
     assert actual == expected
+
+
+def test_lifecycle_round_trip_with_public_embedder_injection(tmp_path: Path) -> None:
+    search = HybridSearch(
+        storage_path=tmp_path,
+        embedder=FakeEmbedder([1.0, 0.0]),
+    )
+
+    search.add(
+        doc_id="doc-1",
+        title="Onboarding Guide",
+        content="Welcome to the alpha project",
+    )
+    search.add(
+        doc_id="doc-2",
+        title="Architecture Overview",
+        content="Design notes about modules",
+    )
+    search.add(
+        doc_id="doc-3",
+        title="Style Guide",
+        content="Conventions for naming",
+    )
+    search.add(
+        doc_id="doc-4",
+        title="Release Process",
+        content="How to ship a tagged version",
+    )
+
+    results = search.query("alpha")
+    assert any(r.doc_id == "doc-1" for r in results)
+    assert all(isinstance(r, SearchResult) for r in results)
+
+    search.update(
+        doc_id="doc-1",
+        title="Onboarding Guide",
+        content="Welcome to the bravo project",
+    )
+
+    results_after_update = search.query("bravo")
+    assert any(r.doc_id == "doc-1" for r in results_after_update)
+
+    search.delete("doc-1")
+
+    results_after_delete = search.query("bravo")
+    assert all(r.doc_id != "doc-1" for r in results_after_delete)
+
+
+def test_restart_with_public_embedder_injection_preserves_query_contributions(
+    tmp_path: Path,
+) -> None:
+    storage_path = tmp_path / "chroma-store"
+    weights = {"semantic": 0.7, "bm25": 0.2, "fuzzy": 0.1}
+
+    writer = HybridSearch(
+        storage_path=storage_path,
+        weights=weights,
+        embedder=FakeEmbedder([1.0, 0.0]),
+    )
+    writer.add(doc_id="doc-1", title="Onboarding Guide", content="Welcome to alpha")
+    writer.add(doc_id="doc-2", title="Architecture Overview", content="Design notes")
+    writer.add(doc_id="doc-3", title="Style Guide", content="Conventions")
+    writer.add(doc_id="doc-4", title="Release Process", content="Tagged versions")
+    del writer
+
+    reader = HybridSearch(
+        storage_path=storage_path,
+        weights=weights,
+        embedder=FakeEmbedder([1.0, 0.0]),
+    )
+
+    results = reader.query("alpha")
+    matched = next((r for r in results if r.doc_id == "doc-1"), None)
+    assert matched is not None
+    assert matched.semantic_score > 0.0
+    assert matched.bm25_score > 0.0
+    assert matched.fuzzy_score >= 0.0

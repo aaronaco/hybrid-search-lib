@@ -1,9 +1,12 @@
 from collections.abc import Iterable
 from pathlib import Path
 
+import pytest
+
 from hybrid_search import HybridSearch
 from hybrid_search import core as core_module
-from hybrid_search.embedder import Embedder
+from hybrid_search import embedder as embedder_module
+from hybrid_search.embedder import DEFAULT_EMBEDDING_MODEL, Embedder
 from hybrid_search.index import SemanticMatch
 
 
@@ -28,6 +31,26 @@ class TrackingEmbedder:
         text_list = list(texts)
         self.embed_batch_calls.append(text_list)
         return [[1.0, 0.0] for _ in text_list]
+
+
+class RecordingEmbedder:
+    model_names: list[str] = []
+
+    def __init__(self, model_name: str = DEFAULT_EMBEDDING_MODEL) -> None:
+        self.model_name = model_name
+        self.model_names.append(model_name)
+
+    def embed(self, text: str) -> list[float]:
+        return [1.0]
+
+    def embed_batch(self, texts: Iterable[str]) -> list[list[float]]:
+        return [[1.0] for _ in texts]
+
+
+def use_recording_embedder(monkeypatch) -> None:
+    RecordingEmbedder.model_names = []
+    monkeypatch.setattr(core_module, "VectorIndex", EmptyVectorIndex)
+    monkeypatch.setattr(core_module, "Embedder", RecordingEmbedder)
 
 
 def test_constructor_accepts_custom_embedder_for_add(tmp_path: Path) -> None:
@@ -68,3 +91,106 @@ def test_default_constructor_still_uses_internal_embedder(monkeypatch) -> None:
     search = HybridSearch()
 
     assert isinstance(search._embedder, Embedder)
+
+
+def test_constructor_passes_embedding_model_to_default_embedder(monkeypatch) -> None:
+    use_recording_embedder(monkeypatch)
+
+    search = HybridSearch(embedding_model="some-model")
+
+    assert isinstance(search._embedder, RecordingEmbedder)
+    assert search._embedder.model_name == "some-model"
+    assert RecordingEmbedder.model_names == ["some-model"]
+
+
+def test_constructor_uses_default_embedding_model_when_unspecified(monkeypatch) -> None:
+    use_recording_embedder(monkeypatch)
+
+    search = HybridSearch()
+
+    assert isinstance(search._embedder, RecordingEmbedder)
+    assert search._embedder.model_name == DEFAULT_EMBEDDING_MODEL
+    assert RecordingEmbedder.model_names == [DEFAULT_EMBEDDING_MODEL]
+
+
+def test_constructor_passes_local_embedding_model_path_unchanged(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    use_recording_embedder(monkeypatch)
+    model_path = str(tmp_path / "local-model")
+
+    search = HybridSearch(embedding_model=model_path)
+
+    assert isinstance(search._embedder, RecordingEmbedder)
+    assert search._embedder.model_name == model_path
+    assert RecordingEmbedder.model_names == [model_path]
+
+
+def test_embedding_model_constructor_does_not_load_sentence_transformer(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(core_module, "VectorIndex", EmptyVectorIndex)
+
+    def fail_if_loaded():
+        raise AssertionError("sentence-transformers should not load during construction")
+
+    monkeypatch.setattr(embedder_module, "_sentence_transformer_class", fail_if_loaded)
+
+    search = HybridSearch(storage_path=tmp_path, embedding_model="some-model")
+
+    assert isinstance(search._embedder, Embedder)
+    assert search._embedder.model_name == "some-model"
+
+
+def test_constructor_raises_when_both_embedder_and_non_default_model_supplied(
+    tmp_path: Path,
+) -> None:
+    with pytest.raises(ValueError):
+        HybridSearch(
+            storage_path=tmp_path,
+            embedder=TrackingEmbedder(),
+            embedding_model="some-other-model",
+        )
+
+
+def test_constructor_raises_when_embedding_model_is_empty_string(
+    tmp_path: Path,
+) -> None:
+    with pytest.raises(ValueError):
+        HybridSearch(storage_path=tmp_path, embedding_model="")
+
+
+def test_constructor_raises_when_embedding_model_is_whitespace_only(
+    tmp_path: Path,
+) -> None:
+    with pytest.raises(ValueError):
+        HybridSearch(storage_path=tmp_path, embedding_model="   ")
+
+
+def test_constructor_accepts_custom_embedder_with_default_embedding_model(
+    tmp_path: Path,
+) -> None:
+    embedder = TrackingEmbedder()
+
+    search = HybridSearch(storage_path=tmp_path, embedder=embedder)
+
+    assert search._embedder is embedder
+
+
+def test_constructor_with_custom_embedder_does_not_load_sentence_transformer(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(core_module, "VectorIndex", EmptyVectorIndex)
+
+    def fail_if_loaded():
+        raise AssertionError("sentence-transformers should not load during construction")
+
+    monkeypatch.setattr(embedder_module, "_sentence_transformer_class", fail_if_loaded)
+
+    embedder = TrackingEmbedder()
+    search = HybridSearch(storage_path=tmp_path, embedder=embedder)
+
+    assert search._embedder is embedder
