@@ -1,9 +1,15 @@
 """Local embedding model wrapper."""
 
 from collections.abc import Iterable
-from typing import Any
+from typing import Any, Protocol
 
 DEFAULT_EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
+
+
+class EmbedderLike(Protocol):
+    def embed(self, text: str) -> list[float]: ...
+
+    def embed_batch(self, texts: Iterable[str]) -> list[list[float]]: ...
 
 
 def _sentence_transformer_class() -> type[Any]:
