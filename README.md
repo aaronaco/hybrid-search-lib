@@ -232,8 +232,9 @@ search = HybridSearch(
 )
 ```
 
-`embedder=` and `embedding_model=` are alternatives — supply one or the
-other, not both.
+Supplying both `embedder=` and a non-default `embedding_model=`, or
+supplying an empty `embedding_model`, raises `ValueError` at construction
+time.
 
 ## Development Checks
 

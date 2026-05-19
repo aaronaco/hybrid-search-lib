@@ -40,7 +40,17 @@ class HybridSearch:
         self.top_k = top_k
         self._document_ids: set[str] = set()
         self._documents: dict[str, dict[str, str]] = {}
-        
+
+        if not embedding_model.strip():
+            raise ValueError(
+                f"embedding_model must be a non-empty string: got {embedding_model!r}"
+            )
+        if embedder is not None and embedding_model != DEFAULT_EMBEDDING_MODEL:
+            raise ValueError(
+                "embedder and embedding_model cannot be supplied together; "
+                "pass one or the other"
+            )
+
         self._embedder = (
             Embedder(model_name=embedding_model) if embedder is None else embedder
         )
