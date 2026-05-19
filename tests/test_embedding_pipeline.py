@@ -8,6 +8,9 @@ class FakeEmbedder:
     def __init__(self) -> None:
         self.received_texts: list[list[str]] = []
 
+    def embed(self, text: str) -> list[float]:
+        return [float(len(text))]
+
     def embed_batch(self, texts: Iterable[str]) -> list[list[float]]:
         text_list = list(texts)
         self.received_texts.append(text_list)

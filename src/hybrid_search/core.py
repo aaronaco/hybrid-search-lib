@@ -7,7 +7,7 @@ from typing import Mapping
 
 from hybrid_search.bm25 import BM25Index
 from hybrid_search.chunker import Chunk, chunk_document
-from hybrid_search.embedder import Embedder
+from hybrid_search.embedder import Embedder, EmbedderLike
 from hybrid_search.fuzzy import FuzzyIndex
 from hybrid_search.index import StoredChunk, VectorIndex
 from hybrid_search.pipeline import embed_chunks
@@ -28,6 +28,7 @@ class HybridSearch:
         chunk_overlap: float = 0.15,
         weights: Mapping[str, float] | None = None,
         top_k: int = 5,
+        embedder: EmbedderLike | None = None,
     ) -> None:
         configured_path = _DEFAULT_STORAGE_PATH if storage_path is None else Path(storage_path)
 
@@ -39,7 +40,7 @@ class HybridSearch:
         self._document_ids: set[str] = set()
         self._documents: dict[str, dict[str, str]] = {}
         
-        self._embedder = Embedder()
+        self._embedder = Embedder() if embedder is None else embedder
         self._vector_index = VectorIndex(storage_path=self.storage_path)
         self._bm25_index = BM25Index()
         self._fuzzy_index = FuzzyIndex()
